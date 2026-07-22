@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mortal-coach.local/contracts/v1/hanchan-summary-request.schema.json",
+  "type": "object",
+  "properties": {
+    "reportId": { "type": "string" }, "stats": { "type": "object" },
+    "scenes": { "type": "array", "minItems": 1, "maxItems": 80, "items": { "$ref": "scene.schema.json" } },
+    "provider": { "enum": ["codex", "claude"] }
+  },
+  "required": ["stats", "scenes"], "additionalProperties": false
+}

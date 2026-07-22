@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "explanations": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+        "type": "object",
+        "properties": {
+          "sceneId": { "type": "string" },
+          "reason": { "type": "string", "maxLength": 1600 },
+          "lesson": { "type": "string", "maxLength": 120 }
+        },
+        "required": ["sceneId", "reason", "lesson"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["explanations"],
+  "additionalProperties": false
+}

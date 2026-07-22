@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "banner": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": ["match", "equivalent", "minor", "clear", "major"]
+        },
+        "qDelta": {
+          "type": "number"
+        },
+        "oneLine": {
+          "type": "string",
+          "maxLength": 60
+        }
+      },
+      "required": ["verdict", "qDelta", "oneLine"],
+      "additionalProperties": false
+    },
+    "comparison": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "tile": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "isMortalTop": {
+            "type": "boolean"
+          },
+          "isActual": {
+            "type": "boolean"
+          },
+          "ukeire": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 136
+          },
+          "value": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "danger": {
+            "type": ["string", "null"],
+            "enum": ["安", "中", "危", "現", null]
+          }
+        },
+        "required": ["tile", "isMortalTop", "isActual", "ukeire", "value", "danger"],
+        "additionalProperties": false
+      }
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "lesson": {
+      "type": "string",
+      "maxLength": 80
+    }
+  },
+  "required": ["banner", "comparison", "reason", "lesson"],
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.log
+*.zip
+node_modules/
+coverage/

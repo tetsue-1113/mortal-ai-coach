@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Mortal × Codex リアルタイム解説",
+  "version": "0.13.0",
+  "description": "Mortalの選択局面を牌効率・守備の学習ルールと押し引き・点棒遷移付きで解説するAI麻雀コーチです。",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://mjai.ekyu.moe/*",
+    "http://127.0.0.1:38765/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mjai.ekyu.moe/killerducky/*"],
+      "css": ["styles.css"],
+      "js": ["extension/clients/bridge-client.js", "extension/adapters/mortal-page-adapter.js", "content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mortal-coach.local/contracts/v1/stream-event.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": { "type": { "const": "status" }, "message": { "type": "string" } },
+      "required": ["type", "message"], "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": { "type": { "const": "result" }, "result": { "type": "object" } },
+      "required": ["type", "result"], "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": { "type": { "const": "error" }, "message": { "type": "string" } },
+      "required": ["type", "message"], "additionalProperties": false
+    }
+  ]
+}
