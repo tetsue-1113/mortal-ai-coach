@@ -65,6 +65,18 @@
 - `actualQ`: ユーザー実打のQ値
 - `loss`: Q値差（= expectedQ - actualQ, 正なら実打が劣位）
 
+### `decisionAssessment`（★結論分類の正本・サーバー側で判定済み）
+- `verdict`: 一致・実質同等・判断保留・軽微・明確・重大の分類。出力ではこの値をそのまま使う
+- `modelOnlyPreference`: trueなら、確認できる局面事実では差を説明できずMortalのQ値だけに差がある。戦術理由を創作しない
+- `candidates[]`: 保存できた候補をQ値順に整理したもの。Q値や選択確率が無い項目は推測しない
+- 選択確率はMortalがその候補を選ぶ相対的な強さであり、和了率・放銃率・勝率ではない
+
+### `decisionRoutes`（★最大3ルートの比較・サーバー側で選定済み）
+- 保存できた候補から「最速」「中間」「守備」の代表を最大3件選んだもの
+- `shantenAfter`、`ukeire`、`danger`、`qDeltaFromTop`、`probability`は入力値をそのまま使う
+- 守備ルートが無い局面では、無理に3ルートへ増やさない
+- `comparison`は原則としてこの配列と同じ候補・同じ順で作る
+
 ### `ukeire`（★受け入れ枚数の正本・サーバー側で手牌から機械計算済み）
 - `bestShanten`: 候補の中で到達できる最小シャンテン数
 - `candidates[]`: 打牌候補ごとの結果

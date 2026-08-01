@@ -107,6 +107,30 @@ export function computeVisibleCounts(tileGroups) {
   return counts;
 }
 
+function callVisibleTiles(call, players) {
+  const consumed = Array.isArray(call?.consumed) ? call.consumed : [];
+  if (call?.type === "kakan") return [call?.pai, ...consumed];
+  if (call?.type === "ankan") return consumed.length >= 4 ? consumed : [call?.pai, ...consumed];
+  if (["chi", "pon", "daiminkan"].includes(call?.type)) {
+    const source = Array.isArray(players) ? players.find(player => player?.playerId === call?.fromPlayer) : null;
+    const calledDiscardExists = source?.discards?.some(discard => discard?.called && canonicalTile(discard?.tile) === canonicalTile(call?.pai));
+    // 鳴かれた牌は河にも残る。通常は手牌から晒した牌だけを足し、古い入力で河が欠ける場合だけ補完する。
+    return calledDiscardExists ? consumed : [call?.pai, ...consumed];
+  }
+  return [call?.pai, ...consumed];
+}
+
+/** 河の鳴かれた牌と副露のpaiを二重計上せず、局面の見えている牌を数える。 */
+export function computeSceneVisibleCounts(hand, doraIndicators, players) {
+  const tablePlayers = Array.isArray(players) ? players : [];
+  return computeVisibleCounts([
+    Array.isArray(hand) ? hand : [],
+    Array.isArray(doraIndicators) ? doraIndicators : [],
+    ...tablePlayers.map(player => player?.discards?.map(discard => discard?.tile) || []),
+    ...tablePlayers.map(player => (player?.calls || []).flatMap(call => callVisibleTiles(call, tablePlayers)))
+  ]);
+}
+
 /**
  * その局面が何によって決まったのかを数値から判定し、解説すべき観点を選ぶ。
  * 4観点を毎回並べるのをやめ、差がついた軸だけを説明させるために使う。

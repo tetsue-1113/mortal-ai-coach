@@ -7,7 +7,7 @@
       "properties": {
         "verdict": {
           "type": "string",
-          "enum": ["match", "equivalent", "minor", "clear", "major"]
+          "enum": ["match", "equivalent", "uncertain", "minor", "clear", "major"]
         },
         "qDelta": {
           "type": "number"
@@ -31,6 +31,10 @@
             "type": "string",
             "maxLength": 8
           },
+          "route": {
+            "type": ["string", "null"],
+            "enum": ["最速", "中間", "守備", null]
+          },
           "isMortalTop": {
             "type": "boolean"
           },
@@ -42,6 +46,19 @@
             "minimum": 0,
             "maximum": 136
           },
+          "shanten": {
+            "type": ["integer", "null"],
+            "minimum": -1,
+            "maximum": 13
+          },
+          "qDelta": {
+            "type": ["number", "null"]
+          },
+          "probability": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
           "value": {
             "type": ["integer", "null"],
             "minimum": 0
@@ -51,7 +68,7 @@
             "enum": ["安", "中", "危", "現", null]
           }
         },
-        "required": ["tile", "isMortalTop", "isActual", "ukeire", "value", "danger"],
+        "required": ["tile", "route", "isMortalTop", "isActual", "shanten", "ukeire", "qDelta", "probability", "value", "danger"],
         "additionalProperties": false
       }
     },

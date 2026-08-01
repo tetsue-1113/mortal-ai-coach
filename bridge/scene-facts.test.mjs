@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computeSafety, computeStandings, computeVisibleCounts, decisionAxes, turnPhase, verifiedPerspective, verifiedTileCounts } from "./scene-facts.mjs";
+import { computeSafety, computeSceneVisibleCounts, computeStandings, computeVisibleCounts, decisionAxes, turnPhase, verifiedPerspective, verifiedTileCounts } from "./scene-facts.mjs";
 
 function sceneFor(overrides = {}) {
   return {
@@ -218,4 +218,30 @@ test("player 1 can be East with 26000 points without reading the upper player's 
   assert.equal(perspective.selfSeatWind, "E");
   assert.equal(perspective.selfScore, 26000);
   assert.equal(perspective.players.find(player => player.relationCode === "kamicha").score, 24000);
+});
+
+test("called discard is not counted twice in visible tiles", () => {
+  const players = [
+    { playerId: 0, discards: [{ tile: "4m", called: true }], calls: [] },
+    { playerId: 1, discards: [], calls: [{ type: "pon", pai: "4m", consumed: ["4m", "4m"], fromPlayer: 0 }] }
+  ];
+  assert.equal(computeSceneVisibleCounts([], [], players)["4m"], 3);
+});
+
+test("call tile is restored when an old payload has no source discard", () => {
+  const players = [
+    { playerId: 1, discards: [], calls: [{ type: "pon", pai: "P", consumed: ["P", "P"], fromPlayer: 0 }] }
+  ];
+  assert.equal(computeSceneVisibleCounts([], [], players).P, 3);
+});
+
+test("chi counts the river tile once and each consumed tile once", () => {
+  const players = [
+    { playerId: 0, discards: [{ tile: "4m", called: true }], calls: [] },
+    { playerId: 1, discards: [], calls: [{ type: "chi", pai: "4m", consumed: ["2m", "3m"], fromPlayer: 0 }] }
+  ];
+  const counts = computeSceneVisibleCounts([], [], players);
+  assert.equal(counts["2m"], 1);
+  assert.equal(counts["3m"], 1);
+  assert.equal(counts["4m"], 1);
 });

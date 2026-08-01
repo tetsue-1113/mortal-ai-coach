@@ -10,3 +10,4 @@
 *.zip
 node_modules/
 coverage/
+evaluation/private/

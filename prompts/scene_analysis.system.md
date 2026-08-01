@@ -25,12 +25,9 @@
 - `metrics.expectedQ` = Mortal推奨のQ値
 - `metrics.actualQ` = ユーザー実打のQ値
 - `metrics.loss` = Q値差（`expectedQ - actualQ`。正なら実打が劣位）
-- Q値差の分類：
-  - `loss < 0.01` → **実質同等**（`verdict: equivalent`）
-  - `0.01 ≤ loss < 0.03` → **軽微な差**（`verdict: minor`）
-  - `0.03 ≤ loss < 0.08` → **明確な差**（`verdict: clear`）
-  - `loss ≥ 0.08` → **重大な差**（`verdict: major`）
-  - `actual.pai === expected.pai` → **一致**（`verdict: match`）
+- 結論分類はサーバー側で計算した `decisionAssessment.verdict` をそのまま使う
+- `uncertain` は、シャンテン・受け入れ・牌価値区分・現在危険度では差を説明できず、Q値だけに差がある状態。Mortalの選択を一般則にせず「確認できる材料では優劣を断定できない」と説明する
+- Q値は点数期待値・和了率・放銃率ではなく、Mortal内部の候補評価にすぎない。Q値差だけから戦術理由を創作しない
 - `alternatives[].probability` = Mortalの方策ネットワークがそのアクションを選ぶ確率（0〜1）。**和了率・放銃率ではない**。「勝率◯%」のように言い換えない。あくまで候補同士の相対的な優先度の目安として使う
 
 ## 押し引き補助判定の使い方
@@ -101,8 +98,8 @@
 
 1. **視点確認**: `selfPlayerId` と `selfSeatWind` を確認、他家の呼称を確定
 2. **実打意図の推定**: 手牌・河・副露から、ユーザーはなぜその牌を切ったか推定
-3. **Q値差の分類**: 上記の5段階から `verdict` を決定
-4. **候補上位3件の抽出**: `alternatives` の中からQ値降順で上位3件（`actual` と `expected` を必ず含める）
+3. **結論分類の確認**: `decisionAssessment.verdict` をそのまま採用し、`uncertain` なら優劣を創作しない
+4. **代表ルートの抽出**: `decisionRoutes`をそのまま使う。空の場合だけ`actual`と`expected`で補う
 5. **各候補の数値把握**: 受け入れ・打点・危険度を入力JSONから抽出
 6. **4観点への根拠割り当て**: どの見出しでどの数値を引用するか
 7. **学習ルール照合**: `tacticsGuidance.matched` から局面に一致するものだけを、理由または次回基準へ反映
@@ -112,16 +109,20 @@
 出力は指定JSON Schemaに従う。以下の構造：
 
 ## `banner`（第1層：結論バナー）
-- `verdict`: `match` | `equivalent` | `minor` | `clear` | `major`
+- `verdict`: `match` | `equivalent` | `uncertain` | `minor` | `clear` | `major`
 - `qDelta`: `metrics.loss` の値をそのまま
 - `oneLine`: 60文字以内の一言。実打者の狙いへの理解＋核心の指摘を含める
 
 ## `comparison`（第2層：候補比較・最大3件）
 各要素：
 - `tile`: 牌の表記（字牌は漢字、数牌はm/p/s）
+- `route`: 計算済み代表ルートの「最速」「中間」「守備」。無ければ `null`
 - `isMortalTop`: `expected.pai` と一致するか
 - `isActual`: `actual.pai` と一致するか
+- `shanten`: 計算済み代表ルートの打牌後シャンテン。無ければ `null`
 - `ukeire`: 入力の受け入れ計算結果にその牌があれば、その `ukeire` の値を**そのまま**書く。無ければ `null`（自分で数えない）
+- `qDelta`: Mortal最上位候補とのQ値差。無ければ `null`。点数損失として説明しない
+- `probability`: Mortalの候補選択確率。無ければ `null`。和了率・放銃率として説明しない
 - `value`: 打点期待（入力JSONから取得、なければ `null`）
 - `danger`: `riichiAccepted: true` の他家がいる場合のみ判定する（いなければ `null`）
   - `現`: その牌がリーチ者の `safety.genbutsu` に含まれる
@@ -176,7 +177,7 @@
 - [ ] データが無い観点を「フィールドが空」ではなく麻雀の事実として書いている
 - [ ] 「なんとなく」「気がする」「たぶん」「一般的に」を含まない
 - [ ] 全ての数値が入力JSONに存在する
-- [ ] `banner.verdict` が Q値差の5段階分類に一致
+- [ ] `banner.verdict` が計算済みの結論分類に一致
 - [ ] `comparison` に `actual` と `expected` の両方が含まれる（同じ牌なら1行）
 - [ ] `reason` の見出しが、入力の「解説すべき観点」と**完全に一致**している（余分な見出しを足していない・順序も同じ）
 - [ ] `reason` は各見出し1〜3個・全体最大7個の箇条書き

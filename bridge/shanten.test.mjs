@@ -97,3 +97,8 @@ test("candidate ukeire compares discards and folds red fives to one entry", () =
     assert.ok(Array.isArray(entry.tiles));
   }
 });
+
+test("reviewed complex hands use the current drawn hand for shanten", () => {
+  assert.equal(shanten(["2m","3m","3m","3m","6m","6m","3p","4p","4p","4p","4p","6p","5s","6s"]), 1);
+  assert.equal(shanten(["2m","5m","8m","9m","1p","3p","8p","3s","7s","9s","N","P","P","F"]), 4);
+});

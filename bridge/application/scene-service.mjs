@@ -1,8 +1,10 @@
-import { computeSafety, computeStandings, computeVisibleCounts, decisionAxes, turnPhase, verifiedPerspective, verifiedTileCounts } from "../scene-facts.mjs";
-import { ukeireAfterDiscard } from "../shanten.mjs";
+import { computeSafety, computeSceneVisibleCounts, computeStandings, decisionAxes, turnPhase, verifiedPerspective, verifiedTileCounts } from "../scene-facts.mjs";
+import { shantenOf, toCounts, ukeireAfterDiscard } from "../shanten.mjs";
 import { computePushFold } from "../push-fold.mjs";
 import { buildScoreSimulation } from "../score-simulator.mjs";
 import { buildTacticsGuidance } from "../tactics-knowledge.mjs";
+import { assessDecision } from "../decision-assessment.mjs";
+import { buildDecisionRoutes } from "../decision-routes.mjs";
 
 const TILE = /^(?:[1-9][mps]r?|[ESWNPFC])$/;
 const ACTIONS = new Set(["dahai", "none", "reach", "chi", "pon", "kan", "ankan", "kakan", "daiminkan", "hora", "ryukyoku"]);
@@ -46,9 +48,16 @@ function tableState(value) {
       fromPlayer: finiteNumber(call?.fromPlayer), atDiscardCount: finiteNumber(call?.atDiscardCount)
     })).filter(call => call.type) : []
   })).filter(player => player.playerId !== null) : [];
+  const activeRiichiSticks = players.filter(player => player.riichiAccepted).length;
+  const reportedKyotaku = finiteNumber(value.kyotakuSticks);
   return {
     doraIndicators: Array.isArray(value.doraIndicators) ? value.doraIndicators.map(tile).filter(Boolean).slice(0, 5) : [],
-    kyotakuSticks: finiteNumber(value.kyotakuSticks), players
+    kyotakuSticks: reportedKyotaku === null
+      ? (activeRiichiSticks || null)
+      : Math.max(reportedKyotaku, activeRiichiSticks),
+    players,
+    _scoresIncludeRiichiDeposits: value.scoresIncludeRiichiDeposits === true
+      || Object.prototype.hasOwnProperty.call(value, "kyotakuSticks")
   };
 }
 
@@ -106,28 +115,36 @@ export function createSceneService(prompts) {
       calls: Array.isArray(input.calls) ? input.calls.slice(0, 4).filter(call => CALLS.has(call?.type)).map(call => ({
         type: call.type, pai: tile(call.pai), consumed: Array.isArray(call.consumed) ? call.consumed.map(tile).filter(Boolean).slice(0, 4) : []
       })) : [],
-      actual: action(input.actual), expected: action(input.expected), shanten: finiteNumber(input.shanten),
+      actual: action(input.actual), expected: action(input.expected),
+      sourceShanten: finiteNumber(input.shanten), shanten: null,
       flags: { furiten: !!f.furiten, selfRiichi: !!f.selfRiichi, callDecision: !!f.callDecision },
       metrics: { expectedQ: finiteNumber(m.expectedQ), actualQ: finiteNumber(m.actualQ), loss: finiteNumber(m.loss) },
       table: tableState(input.table), roundOutcome: roundOutcome(input.roundOutcome),
       alternatives: Array.isArray(input.alternatives) ? input.alternatives.slice(0, 8).map(alternative => ({
         action: action(alternative.action), q: finiteNumber(alternative.q), probability: finiteNumber(alternative.probability)
-      })).filter(alternative => alternative.action && alternative.q !== null && alternative.probability !== null) : []
+      })).filter(alternative => alternative.action && (alternative.q !== null || alternative.probability !== null)) : []
     };
     if (!normalized.hand.length || !normalized.actual || !normalized.expected) {
       throw new Error(`Required mahjong fields are missing (scene: ${normalized.sceneId || "unknown"}, hand: ${normalized.hand.length}, actual: ${!!normalized.actual}, expected: ${!!normalized.expected})`);
     }
+    if (!normalized.table._scoresIncludeRiichiDeposits) {
+      const acceptedPlayers = new Set(normalized.table.players.filter(player => player.riichiAccepted).map(player => player.playerId));
+      normalized.scores = normalized.scores.map((score, playerId) => acceptedPlayers.has(playerId) ? score - 1000 : score);
+    }
+    delete normalized.table._scoresIncludeRiichiDeposits;
+    // Mortalのreview.shantenは現在のツモを引く前の値。解説では現在手牌を正本にする。
+    normalized.shanten = shantenOf(toCounts(normalized.hand), normalized.calls.length);
     normalized.verifiedTileCounts = verifiedTileCounts(normalized.hand, normalized.table.doraIndicators);
     normalized.verifiedPerspective = verifiedPerspective(normalized.playerId, normalized.context.seatWind, normalized.table.players, normalized.scores);
     normalized.standings = computeStandings(normalized.scores, normalized.playerId);
     normalized.table.players = normalized.table.players.map(player => ({ ...player, safety: computeSafety(player.discards.map(discard => discard.tile)) }));
-    normalized.table.visibleCounts = computeVisibleCounts([
-      normalized.hand, normalized.table.doraIndicators,
-      ...normalized.table.players.map(player => player.discards.map(discard => discard.tile)),
-      ...normalized.table.players.map(player => player.calls.flatMap(call => [call.pai, ...call.consumed]))
-    ]);
+    normalized.table.visibleCounts = computeSceneVisibleCounts(
+      normalized.hand, normalized.table.doraIndicators, normalized.table.players
+    );
     normalized.ukeire = candidateUkeire(normalized);
     normalized.pushFold = computePushFold(normalized);
+    normalized.decisionAssessment = assessDecision(normalized);
+    normalized.decisionRoutes = buildDecisionRoutes(normalized);
     normalized.scoreSimulation = buildScoreSimulation(normalized);
     normalized.tacticsGuidance = buildTacticsGuidance(normalized);
     normalized.decisionAxes = decisionAxes(normalized);

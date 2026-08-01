@@ -84,7 +84,7 @@ sequenceDiagram
 ## API互換性
 
 - 現行契約: `1.0`
-- 現行サーバー: `0.13.0`
+- 現行サーバー: `0.14.0`
 - v1ルートは `bridge/contracts/api.mjs` が正本です。
 - NDJSONイベントは `bridge/contracts/stream-event.schema.json` で定義します。
 - 旧ルートはv1へ変換するだけで、新しい実装を二重に持ちません。

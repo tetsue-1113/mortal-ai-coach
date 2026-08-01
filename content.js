@@ -378,6 +378,7 @@
       ? score - 1000 : score);
     const table = {
       ...rawTable,
+      scoresIncludeRiichiDeposits: true,
       players: rawTable.players.map(player => ({ ...player, score: scores[player.playerId] }))
     };
     const reviewKyokus = state.report.review?.kyokus || [];
@@ -416,8 +417,10 @@
       table,
       roundOutcome,
       alternatives: (entry.details || []).slice(0, 8).map(d => ({
-        action: cleanAction(d.action), q: Number(d.q_value), probability: Number(d.prob)
-      })).filter(d => d.action && Number.isFinite(d.q) && Number.isFinite(d.prob))
+        action: cleanAction(d.action),
+        q: Number.isFinite(Number(d.q_value)) ? Number(d.q_value) : null,
+        probability: Number.isFinite(Number(d.prob)) ? Number(d.prob) : null
+      })).filter(d => d.action && (Number.isFinite(d.q) || Number.isFinite(d.probability)))
     };
   }
 
@@ -496,7 +499,7 @@
   }
 
   function sceneCacheKey(sceneKey) {
-    return `scene:${state.provider}:${sceneKey}:v13`;
+    return `scene:${state.provider}:${sceneKey}:v14`;
   }
 
   function chatCacheKey(sceneKey) {
@@ -615,6 +618,7 @@
     const presentations = {
       match: { icon: "✅", label: "一致", className: "match" },
       equivalent: { icon: "✅", label: "実質同等", className: "equivalent" },
+      uncertain: { icon: "🔎", label: "優劣を断定しない", className: "uncertain" },
       minor: { icon: "🟡", label: "軽微な差", className: "minor" },
       clear: { icon: "⚠️", label: "明確な差", className: "clear" },
       major: { icon: "🚨", label: "重大な差", className: "major" }
@@ -643,8 +647,8 @@
     const actualTile = entry?.actual?.pai;
     const expectedTile = entry?.expected?.pai;
     const fallback = [];
-    if (expectedTile) fallback.push({ tile: expectedTile, isMortalTop: true, isActual: expectedTile === actualTile, ukeire: null, value: null, danger: null });
-    if (actualTile && actualTile !== expectedTile) fallback.push({ tile: actualTile, isMortalTop: false, isActual: true, ukeire: null, value: null, danger: null });
+    if (expectedTile) fallback.push({ tile: expectedTile, route: null, isMortalTop: true, isActual: expectedTile === actualTile, shanten: null, ukeire: null, qDelta: null, probability: null, value: null, danger: null });
+    if (actualTile && actualTile !== expectedTile) fallback.push({ tile: actualTile, route: null, isMortalTop: false, isActual: true, shanten: null, ukeire: null, qDelta: null, probability: null, value: null, danger: null });
     return fallback;
   }
 
@@ -664,7 +668,8 @@
       const deterministicDanger = item?.isMortalTop ? result?.pushFold?.tileDanger?.expected?.label
         : item?.isActual ? result?.pushFold?.tileDanger?.actual?.label : null;
       const danger = deterministicDanger && deterministicDanger !== "—" ? deterministicDanger : item?.danger;
-      return `<tr${item?.isMortalTop ? ' class="mcl-top-candidate"' : ""}><th scope="row">${html(tileLabel(item?.tile))}${markers}</th><td>${html(metricLabel(item?.ukeire))}</td><td>${html(metricLabel(item?.value))}</td><td>${html(danger || "—")}</td></tr>`;
+      const qDelta = Number.isFinite(item?.qDelta) ? `-${Math.abs(item.qDelta).toFixed(3)}` : "—";
+      return `<tr${item?.isMortalTop ? ' class="mcl-top-candidate"' : ""}><td>${html(item?.route || "—")}</td><th scope="row">${html(tileLabel(item?.tile))}${markers}</th><td>${html(metricLabel(item?.shanten))}</td><td>${html(metricLabel(item?.ukeire))}</td><td>${html(qDelta)}</td><td>${html(danger || "—")}</td></tr>`;
     }).join("");
     const reason = result?.reason || result?.summary || "### 詳細解説\n- 理由を生成できませんでした。";
     const pushFold = result?.pushFold;
@@ -701,10 +706,11 @@
       ${scoreSimulationHtml}
       <section class="mcl-one-line"><h3><span aria-hidden="true">💡</span>一言</h3><p>${html(oneLine)}</p></section>
       <section class="mcl-comparison"><h3><span aria-hidden="true">📊</span>候補比較</h3>
-        <div class="mcl-table-wrap"><table><thead><tr><th>打牌</th><th>受入</th><th>打点</th><th>危険</th></tr></thead><tbody>${rows || '<tr><td colspan="4">候補データなし</td></tr>'}</tbody></table></div>
+        <div class="mcl-table-wrap"><table><thead><tr><th>方針</th><th>打牌</th><th>向聴</th><th>受入</th><th>Q差</th><th>危険</th></tr></thead><tbody>${rows || '<tr><td colspan="6">候補データなし</td></tr>'}</tbody></table></div>
         <p class="mcl-marker-guide"><span class="mcl-candidate-marker top">★</span>Mortal推奨 <span class="mcl-candidate-marker actual">●</span>実打</p>
       </section>
       <details class="mcl-analysis-details" open><summary>詳細解説</summary><div class="mcl-reason-sections">${formatCoachingReason(reason)}</div></details>
+      <section class="mcl-intent-review"><h3>あなたはなぜ実打を選びましたか？</h3><p>理由を入力すると、正しい部分と修正点を盤面の事実・数字で検証します。</p><button id="mcl-intent-review-start" type="button">打牌理由を入力</button></section>
     </article>`;
   }
 
@@ -735,6 +741,13 @@
       return;
     }
     box.innerHTML = analysisResultHtml(state.result, state.entry);
+    box.querySelector("#mcl-intent-review-start")?.addEventListener("click", () => {
+      const input = document.querySelector("#mcl-question");
+      if (!input) return;
+      input.value = "この打牌を選んだ理由：";
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
   }
 
   function renderStatus() {
@@ -860,7 +873,7 @@
 
   async function generateSummary({ force = false } = {}) {
     if (state.generating || !providerReady()) return;
-      const key = `summary:${state.provider}:${state.reportId}:v5`;
+      const key = `summary:${state.provider}:${state.reportId}:v6`;
     state.showingSummary = true;
     if (!force) {
       const existing = await cached(key);

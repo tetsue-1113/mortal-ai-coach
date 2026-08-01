@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tetsue-1113/mortal-ai-coach/evaluation/evaluation-case.schema.json",
+  "title": "Mortal AI Coach evaluation case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "caseId",
+    "category",
+    "tags",
+    "input",
+    "baseline",
+    "reference",
+    "scores"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "caseId": { "type": "string", "pattern": "^eval-v[0-9]+-[0-9]{3}$" },
+    "category": {
+      "enum": ["efficiency", "defense", "riichi", "calls", "placement", "control"]
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "sceneId",
+        "reportId",
+        "playerId",
+        "position",
+        "context",
+        "scores",
+        "hand",
+        "calls",
+        "actual",
+        "expected",
+        "flags",
+        "metrics",
+        "table",
+        "alternatives"
+      ]
+    },
+    "baseline": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["reason", "lesson"],
+      "properties": {
+        "reason": { "type": "string" },
+        "lesson": { "type": "string" }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "mustMention", "mustNotClaim", "idealReason", "idealLesson", "reviewerNotes"],
+      "properties": {
+        "status": { "enum": ["unreviewed", "learner-reviewed", "expert-reviewed"] },
+        "mustMention": { "type": "array", "items": { "type": "string" } },
+        "mustNotClaim": { "type": "array", "items": { "type": "string" } },
+        "idealReason": { "type": "string" },
+        "idealLesson": { "type": "string" },
+        "reviewerNotes": { "type": "string" }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factualCorrectness", "decisionRelevance", "uncertaintyDiscipline", "coachingValue", "criticalError"],
+      "properties": {
+        "factualCorrectness": { "type": ["integer", "null"], "minimum": 0, "maximum": 2 },
+        "decisionRelevance": { "type": ["integer", "null"], "minimum": 0, "maximum": 2 },
+        "uncertaintyDiscipline": { "type": ["integer", "null"], "minimum": 0, "maximum": 2 },
+        "coachingValue": { "type": ["integer", "null"], "minimum": 0, "maximum": 2 },
+        "criticalError": { "type": ["boolean", "null"] }
+      }
+    }
+  }
+}
