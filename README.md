@@ -76,6 +76,10 @@ SQLiteを正本にしています。ObsidianはMarkdownの閲覧・復習に、N
 - Windows: `%APPDATA%\MortalCodexBridge\mahjong-coach.sqlite3`
 - Linux: `$XDG_DATA_HOME/MortalCodexBridge/mahjong-coach.sqlite3`（未設定時は `~/.local/share/...`）
 - iCloud等の任意フォルダへ保存する場合は、インストール前に環境変数 `MORTAL_CODEX_DATA_DIR` で保存先を指定できます。既存の常駐設定を更新する場合は、現在の保存先を自動的に引き継ぎます。
+- 以前iCloud上の保存先を設定していて、標準の端末ローカル保存先へ戻す場合は、ブリッジを利用していない状態で
+  `./migrate-data-to-local.command preflight` を実行します。確認後、
+  `MORTAL_MIGRATION_CONFIRM=1 ./migrate-data-to-local.command migrate` でコピーと切替を行い、
+  `./migrate-data-to-local.command verify` で検証します。元のSQLiteは削除されず、LaunchAgentも失敗時に元へ戻ります。
 - 開発・テスト時は `MORTAL_CODEX_DATA_DIR` でフォルダ、`MORTAL_CODEX_DB_NAME` でファイル名を変更可能
 
 旧版の `~/Library/Application Support/MortalCodexBridge/coach.sqlite3` があり、新しいDBがまだ存在しない場合は、初回起動時に内容を新しい保存先へコピーします。
