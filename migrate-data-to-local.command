@@ -29,7 +29,10 @@ current_data_dir() {
 current_port() {
   local port
   port="$("$PLUTIL_BIN" -extract EnvironmentVariables.MORTAL_CODEX_PORT raw -o - "$AGENT_PATH" 2>/dev/null || print -r -- 38765)"
-  [[ "$port" == <1-65535> ]] || die "ブリッジのポート設定が不正です"
+  case "$port" in
+    ''|*[!0-9]*) die "ブリッジのポート設定が不正です" ;;
+  esac
+  (( port >= 1 && port <= 65535 )) || die "ブリッジのポート設定が不正です"
   print -r -- "$port"
 }
 
@@ -95,28 +98,37 @@ preflight() {
 }
 
 restore_agent() {
+  local restored_data_dir
   [[ -f "$BACKUP_PLIST" ]] || return 0
   "$LAUNCHCTL_BIN" bootout "gui/$UID/$LABEL" >/dev/null 2>&1 || true
-  "$DITTO_BIN" "$BACKUP_PLIST" "$AGENT_PATH"
-  "$LAUNCHCTL_BIN" bootstrap "gui/$UID" "$AGENT_PATH" >/dev/null 2>&1 || true
-  "$LAUNCHCTL_BIN" kickstart -k "gui/$UID/$LABEL" >/dev/null 2>&1 || true
+  "$DITTO_BIN" "$BACKUP_PLIST" "$AGENT_PATH" || return 1
+  restored_data_dir="$(current_data_dir)" || return 1
+  "$LAUNCHCTL_BIN" bootstrap "gui/$UID" "$AGENT_PATH" >/dev/null 2>&1 || return 1
+  "$LAUNCHCTL_BIN" kickstart -k "gui/$UID/$LABEL" >/dev/null 2>&1 || return 1
+  "$LAUNCHCTL_BIN" print "gui/$UID/$LABEL" >/dev/null 2>&1 || return 1
+  wait_for_bridge "$restored_data_dir/$DB_NAME" || return 1
 }
 
 migration_cleanup() {
   local status=$?
   if [[ "$MIGRATION_IN_PROGRESS" == "1" ]]; then
-    restore_agent
+    if restore_agent; then
+      print -u2 -- "旧LaunchAgentへの自動復旧を確認しました"
+    else
+      print -u2 -- "自動復旧を確認できません。ブリッジは停止中の可能性があります"
+      status=2
+    fi
   fi
   return "$status"
 }
 
 wait_for_bridge() {
-  local attempt port
+  local expected_db="$1" attempt port
   port="$(current_port)"
   for attempt in {1..10}; do
     if "$CURL_BIN" --fail --silent --max-time 2 \
       "http://127.0.0.1:${port}/api/v1/records/status" 2>/dev/null \
-      | grep -Fq -- "$LOCAL_DATA_DIR/$DB_NAME"; then
+      | grep -Fq -- "$expected_db"; then
       return 0
     fi
     sleep 1
@@ -154,15 +166,15 @@ migrate() {
 
   if ! "$LAUNCHCTL_BIN" bootstrap "gui/$UID" "$AGENT_PATH" >/dev/null 2>&1 \
     || ! "$LAUNCHCTL_BIN" kickstart -k "gui/$UID/$LABEL" >/dev/null 2>&1; then
-    die "新しいLaunchAgentを起動できなかったため、元の設定へ戻しました"
+    die "新しいLaunchAgentを起動できません。旧設定への自動復旧を試みます"
   fi
 
   after="$(db_signature "$destination_db")"
   if [[ "$before" != "$after" ]] \
     || [[ "$(current_data_dir)" != "$LOCAL_DATA_DIR" ]] \
     || ! "$LAUNCHCTL_BIN" print "gui/$UID/$LABEL" >/dev/null 2>&1 \
-    || ! wait_for_bridge; then
-    die "切替後の検証に失敗したため、元のLaunchAgentへ戻しました"
+    || ! wait_for_bridge "$destination_db"; then
+    die "切替後の検証に失敗しました。旧設定への自動復旧を試みます"
   fi
 
   MIGRATION_IN_PROGRESS=0
@@ -179,7 +191,8 @@ verify() {
   db_signature "$destination_db" >/dev/null
   "$LAUNCHCTL_BIN" print "gui/$UID/$LABEL" >/dev/null 2>&1 \
     || die "ブリッジがlaunchdへ登録されていません"
-  wait_for_bridge || die "ブリッジAPIがローカルSQLiteを使用していることを確認できません"
+  wait_for_bridge "$destination_db" \
+    || die "ブリッジAPIがローカルSQLiteを使用していることを確認できません"
   print -- "検証完了: ローカルSQLiteとブリッジ登録は正常です"
 }
 
