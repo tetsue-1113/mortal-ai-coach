@@ -79,7 +79,8 @@ SQLiteを正本にしています。ObsidianはMarkdownの閲覧・復習に、N
 - 以前iCloud上の保存先を設定していて、標準の端末ローカル保存先へ戻す場合は、ブリッジを利用していない状態で
   `./migrate-data-to-local.command preflight` を実行します。確認後、
   `MORTAL_MIGRATION_CONFIRM=1 ./migrate-data-to-local.command migrate` でコピーと切替を行い、
-  `./migrate-data-to-local.command verify` で検証します。元のSQLiteは削除されず、LaunchAgentも失敗時に元へ戻ります。
+  `./migrate-data-to-local.command verify` で検証します。元のSQLiteは削除されません。切替失敗時は
+  旧LaunchAgentへの復旧を試み、復旧を確認できない場合はエラーで通知します。
 - 開発・テスト時は `MORTAL_CODEX_DATA_DIR` でフォルダ、`MORTAL_CODEX_DB_NAME` でファイル名を変更可能
 
 旧版の `~/Library/Application Support/MortalCodexBridge/coach.sqlite3` があり、新しいDBがまだ存在しない場合は、初回起動時に内容を新しい保存先へコピーします。

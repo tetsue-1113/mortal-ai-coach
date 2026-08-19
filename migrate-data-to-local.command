@@ -32,6 +32,7 @@ current_port() {
   case "$port" in
     ''|*[!0-9]*) die "ブリッジのポート設定が不正です" ;;
   esac
+  port=$((10#$port))
   (( port >= 1 && port <= 65535 )) || die "ブリッジのポート設定が不正です"
   print -r -- "$port"
 }
@@ -98,10 +99,19 @@ preflight() {
 }
 
 restore_agent() {
-  local restored_data_dir
+  local restored_data_dir restore_temp
   [[ -f "$BACKUP_PLIST" ]] || return 0
   "$LAUNCHCTL_BIN" bootout "gui/$UID/$LABEL" >/dev/null 2>&1 || true
-  "$DITTO_BIN" "$BACKUP_PLIST" "$AGENT_PATH" || return 1
+  restore_temp="$STATE_DIR/.restore-agent.plist.$$"
+  rm -f -- "$restore_temp"
+  if ! "$DITTO_BIN" "$BACKUP_PLIST" "$restore_temp"; then
+    rm -f -- "$restore_temp"
+    return 1
+  fi
+  if ! mv "$restore_temp" "$AGENT_PATH"; then
+    rm -f -- "$restore_temp"
+    return 1
+  fi
   restored_data_dir="$(current_data_dir)" || return 1
   "$LAUNCHCTL_BIN" bootstrap "gui/$UID" "$AGENT_PATH" >/dev/null 2>&1 || return 1
   "$LAUNCHCTL_BIN" kickstart -k "gui/$UID/$LABEL" >/dev/null 2>&1 || return 1
@@ -110,16 +120,17 @@ restore_agent() {
 }
 
 migration_cleanup() {
-  local status=$?
+  local exit_code=$?
+  trap - EXIT
   if [[ "$MIGRATION_IN_PROGRESS" == "1" ]]; then
     if restore_agent; then
       print -u2 -- "旧LaunchAgentへの自動復旧を確認しました"
     else
       print -u2 -- "自動復旧を確認できません。ブリッジは停止中の可能性があります"
-      status=2
+      exit_code=2
     fi
   fi
-  return "$status"
+  exit "$exit_code"
 }
 
 wait_for_bridge() {
@@ -197,7 +208,9 @@ verify() {
 }
 
 self_test() {
-  local root source destination divergent
+  local root source destination divergent old_data fake_bin fake_launchctl fake_curl
+  local saved_agent_path saved_backup_plist saved_state_dir saved_launchctl_bin saved_curl_bin
+  local recovered_status failed_recovery_status
   root="$(mktemp -d "${TMPDIR:-/tmp}/mortal-data-migration.XXXXXX")"
   trap "rm -rf -- ${(q)root}" EXIT INT TERM
   source="$root/source/$DB_NAME"
@@ -219,6 +232,55 @@ SQL
   if (copy_verified "$source" "$divergent") >/dev/null 2>&1; then
     die "self-test: 異なる移行先を拒否できませんでした"
   fi
+
+  old_data="$root/old-data"
+  fake_bin="$root/fake-bin"
+  fake_launchctl="$fake_bin/launchctl"
+  fake_curl="$fake_bin/curl"
+  mkdir -p "$old_data" "$fake_bin" "$root/state"
+  printf '%s\n' '#!/bin/sh' 'exit "${FAKE_LAUNCHCTL_STATUS:-0}"' > "$fake_launchctl"
+  printf '%s\n' '#!/bin/sh' 'printf '\''{"path":"%s"}'\'' "$FAKE_STATUS_PATH"' > "$fake_curl"
+  chmod 700 "$fake_launchctl" "$fake_curl"
+
+  saved_agent_path="$AGENT_PATH"
+  saved_backup_plist="$BACKUP_PLIST"
+  saved_state_dir="$STATE_DIR"
+  saved_launchctl_bin="$LAUNCHCTL_BIN"
+  saved_curl_bin="$CURL_BIN"
+  AGENT_PATH="$root/current.plist"
+  STATE_DIR="$root/state"
+  BACKUP_PLIST="$STATE_DIR/pre-local-data.plist"
+  LAUNCHCTL_BIN="$fake_launchctl"
+  CURL_BIN="$fake_curl"
+  "$PLUTIL_BIN" -create xml1 "$AGENT_PATH"
+  "$PLUTIL_BIN" -insert EnvironmentVariables -json \
+    "{\"MORTAL_CODEX_DATA_DIR\":\"$LOCAL_DATA_DIR\"}" "$AGENT_PATH"
+  "$PLUTIL_BIN" -insert EnvironmentVariables.MORTAL_CODEX_PORT -string 089 "$AGENT_PATH"
+  [[ "$(current_port)" == "89" ]] || die "self-test: 先頭ゼロ付きポートを10進数で扱えません"
+  "$PLUTIL_BIN" -replace EnvironmentVariables.MORTAL_CODEX_PORT -string 38765 "$AGENT_PATH"
+  "$DITTO_BIN" "$AGENT_PATH" "$BACKUP_PLIST"
+  "$PLUTIL_BIN" -replace EnvironmentVariables.MORTAL_CODEX_DATA_DIR -string "$old_data" "$BACKUP_PLIST"
+  export FAKE_STATUS_PATH="$old_data/$DB_NAME"
+  export FAKE_LAUNCHCTL_STATUS=0
+  set +e
+  ( MIGRATION_IN_PROGRESS=1; trap migration_cleanup EXIT; exit 1 ) >/dev/null 2>&1
+  recovered_status=$?
+  set -e
+  [[ "$recovered_status" == "1" ]] || die "self-test: 復旧成功時の終了コードが不正です"
+  [[ "$(current_data_dir)" == "$old_data" ]] || die "self-test: 旧plistを復元できませんでした"
+
+  export FAKE_LAUNCHCTL_STATUS=1
+  set +e
+  ( MIGRATION_IN_PROGRESS=1; trap migration_cleanup EXIT; exit 1 ) >/dev/null 2>&1
+  failed_recovery_status=$?
+  set -e
+  [[ "$failed_recovery_status" == "2" ]] || die "self-test: 復旧失敗を終了コード2で通知できませんでした"
+  unset FAKE_STATUS_PATH FAKE_LAUNCHCTL_STATUS
+  AGENT_PATH="$saved_agent_path"
+  BACKUP_PLIST="$saved_backup_plist"
+  STATE_DIR="$saved_state_dir"
+  LAUNCHCTL_BIN="$saved_launchctl_bin"
+  CURL_BIN="$saved_curl_bin"
   print -- "self-test成功"
 }
 
